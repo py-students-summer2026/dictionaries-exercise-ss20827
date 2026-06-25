@@ -1,9 +1,12 @@
 """
-Functions necessary for running a virtual cookie shop.
+Functions necessary for running a virtual cookie shop (extra credit).
 See README.md for instructions.
 Do not run this file directly.  Rather, run main.py instead.
+
+This is the Extra Credit version.
 """
 
+import csv
 
 def bake_cookies(filepath):
     """
@@ -17,25 +20,32 @@ def bake_cookies(filepath):
     """
     # write your code for this function below here.
     cookies = []
-    with open(filepath, mode="r") as f:
-        i = 0
-        for line in f:
-            if i == 0:
-                i = i + 1
+    with open(filepath, mode="r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            if len(row) == 0:
                 continue
-            line = line.strip()
-            if line == "":
-                continue
-            values = line.split(",")
             cookie = {
-                'id': int(values[0]),
-                'title': values[1],
-                'description': values[2],
-                'price': float(values[3].replace("$", ""))
+                'id': int(row[0]),
+                'title': row[1],
+                'description': row[2],
+                'price': float(row[3].replace("$", "")),
+                'sugar_free': row[4].strip().lower() == "true",
+                'gluten_free': row[5].strip().lower() == "true",
+                'contains_nuts': row[6].strip().lower() == "true"
             }
             cookies.append(cookie)
-            i = i + 1
     return cookies
+
+def ask_yes_no(prompt):
+    valid_responses = ["yes", "y", "no", "n"]
+    response = ""
+    while response.lower() not in valid_responses:
+        response = input(prompt)
+        if response.lower() not in valid_responses:
+            print("Please enter 'yes', 'y', 'no', 'n'.")
+    return response.lower() in ["yes", "y"]
 
 
 def welcome():
@@ -49,9 +59,32 @@ def welcome():
     # write your code for this function below this line
     print("Welcome to the Python Cookie Shop!")
     print("We feed each according to their need.")
+    print()
+    print("We'd hate to trigger an allergic reaction to your body. So please answer the following questions:")
+    print()
+    allergic_to_nuts = ask_yes_no("Are you allergic to nuts? ")
+    allergic_to_gluten = ask_yes_no("Are you allergic to gluten? ")
+    has_diabetes = ask_yes_no("Do you have diabetes? ")
+    return {
+        'allergic_to_nuts': allergic_to_nuts,
+        'allergic_to_gluten': allergic_to_gluten,
+        'has_diabetes': has_diabetes
+    }
+
+def filter_cookies(cookies, dietary_needs):
+    suitable = []
+    for cookie in cookies:
+        if dietary_needs['allergic_to_nuts'] and cookie['contains_nuts']:
+            continue
+        if dietary_needs['allergic_to_gluten'] and not cookie['gluten_free']:
+            continue
+        if dietary_needs['has_diabetes'] and not cookie['sugar_free']:
+            continue
+        suitable.append(cookie)
+    return suitable
 
 
-def display_cookies(cookies):
+def display_cookies(cookies, dietary_needs):
     """
     Prints a list of all cookies in the shop to the user.
     - Sample output - we show only two cookies here, but imagine the output continues for all cookiese:
@@ -70,13 +103,28 @@ def display_cookies(cookies):
     :param cookies: a list of all cookies in the shop, where each cookie is represented as a dictionary.
     """
     # write your code for this function below this line
-    print("\nHere are the cookies we have in the shop for you:\n")
-    for cookie in cookies:
+    suitable_cookies = filter_cookies(cookies, dietary_needs)
+    restrictions = []
+    if dietary_needs['allergic_to_nuts']:
+        restrictions.append("nuts")
+    if dietary_needs['allergic_to_gluten']:
+        restrictions.append("gluten")
+    if dietary_needs['has_diabetes']:
+        restrictions.append("sugar")
+    if restrictions:
+        restriction_str = " or ".join(restrictions)
+        print(f"\nHere are the cookies without {restriction_str} that we think you might like:\n")
+    else:
+        print("\nHere are the cookies we have in the shop for you:\n")
+    if not suitable_cookies:
+        print("Sorry we don't have any cookies that match your dietary needs at this time.\n")
+        return
+    for cookie in suitable_cookies:
         print(f"#{cookie['id']} - {cookie['title']}")
         print(f"{cookie['description']}")
         print(f"Price: ${cookie['price']:.2f}")
         print()
-
+    return suitable_cookies
 
 def get_cookie_from_dict(id, cookies):
     """
@@ -120,7 +168,7 @@ def solicit_quantity(id, cookies):
 
 
 
-def solicit_order(cookies):
+def solicit_order(cookies, suitable_cookies):
     """
     Takes the complete order from the customer.
     - Asks over-and-over again for the user to enter the id of a cookie they want to order until they enter 'finished', 'done', 'quit', or 'exit'.
@@ -139,12 +187,12 @@ def solicit_order(cookies):
     # write your code for this function below this line
     order = []
     stop_words = ["finished", "done", "quit", "exit"]
+    suitable_ids = [c['id'] for c in suitable_cookies]
     response = input("\nPlease enter the number of any cookie you would like to purchase: ")
     while response.lower() not in stop_words:
         if response.isnumeric():
             id = int(response)
-            cookie = get_cookie_from_dict(id, cookies)
-            if cookie is not None:
+            if id in suitable_ids:
                 quantity = solicit_quantity(id, cookies)
                 order.append({'id': id, 'quantity': quantity})
             else:
@@ -196,7 +244,10 @@ def run_shop(cookies):
     :param cookies: A list of all cookies in the shop, where each cookie is represented as a dictionary.
     """
     # write your code for this function below here.
-    welcome()
-    display_cookies(cookies)
-    order = solicit_order(cookies)
+    dietary_needs = welcome()
+    suitable_cookies = display_cookies(cookies, dietary_needs)
+    if not suitable_cookies:
+        print("We're sorry we couldn't serve you today. Please visit again!")
+        return
+    order = solicit_order(cookies, suitable_cookies)
     display_order_total(order, cookies)
